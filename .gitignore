@@ -1,0 +1,8 @@
+# --- Security & Secrets ---
+# Never commit your Aiven/Kafka certificates or keys
+infra/certs/
+*.pem
+*.cert
+*.key
+.env
+
