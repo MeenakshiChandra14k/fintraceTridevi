@@ -6,3 +6,4 @@ infra/certs/
 *.key
 .env
 
+scripts/data/
