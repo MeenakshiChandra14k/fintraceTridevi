@@ -7,3 +7,32 @@ infra/certs/
 .env
 
 scripts/data/
+
+venv/
+__pycache__/
+*.pyc
+
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+
+# Virtual env
+venv/
+.env/
+
+# Logs
+*.log
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+
+# Certificates (IMPORTANT - YOU ALREADY HAVE THESE)
+infra/certs/*.pem
+infra/certs/*.key
+infra/certs/*.cert

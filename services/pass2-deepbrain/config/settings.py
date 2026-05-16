@@ -1,0 +1,15 @@
+import os
+from dotenv import load_dotenv
+
+load_dotenv()
+
+KAFKA_SERVICE_URI = os.getenv("KAFKA_SERVICE_URI")
+KAFKA_TOPIC_TRANSACTIONS = os.getenv("KAFKA_TOPIC_TRANSACTIONS")
+
+KAFKA_CA_CERT_PATH = os.getenv("KAFKA_CA_CERT_PATH")
+KAFKA_ACCESS_CERT_PATH = os.getenv("KAFKA_ACCESS_CERT_PATH")
+KAFKA_ACCESS_KEY_PATH = os.getenv("KAFKA_ACCESS_KEY_PATH")
+
+NEO4J_URI = os.getenv("NEO4J_URI")
+NEO4J_USER = os.getenv("NEO4J_USER")
+NEO4J_PASSWORD = os.getenv("NEO4J_PASSWORD")
