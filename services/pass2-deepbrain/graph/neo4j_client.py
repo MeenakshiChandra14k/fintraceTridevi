@@ -1,26 +1,45 @@
-from neo4j import GraphDatabase
-
-from dotenv import load_dotenv
 import os
 
-load_dotenv()
+from pathlib import Path
+from dotenv import load_dotenv
+from neo4j import GraphDatabase
+
+
+env_path = Path(__file__).resolve().parent.parent / ".env"
+
+load_dotenv(dotenv_path=env_path)
 
 
 class Neo4jClient:
 
     def __init__(self):
 
-        self.driver = GraphDatabase.driver(
+        print("🔥 Neo4j INIT STARTED")
 
-            os.getenv("NEO4J_URI"),
+        print("URI:", os.getenv("NEO4J_URI"))
+        print("USERNAME:", os.getenv("NEO4J_USERNAME"))
 
-            auth=(
-                os.getenv("NEO4J_USER"),
-                os.getenv("NEO4J_PASSWORD")
+        try:
+
+            self.driver = GraphDatabase.driver(
+
+                os.getenv("NEO4J_URI"),
+
+                auth=(
+
+                    os.getenv("NEO4J_USERNAME"),
+
+                    os.getenv("NEO4J_PASSWORD")
+                )
             )
-        )
 
-        self.database = os.getenv("NEO4J_DATABASE")
+            self.driver.verify_connectivity()
+
+            print("🕸 Connected to Neo4j Aura")
+
+        except Exception as e:
+
+            print("❌ CONNECTION ERROR:", e)
 
     def close(self):
 
@@ -30,39 +49,33 @@ class Neo4jClient:
 
         query = """
 
-        MERGE (sender:Account {
-            id: $sender
-        })
+        MERGE (sender:Account {id: $sender})
 
-        MERGE (receiver:Account {
-            id: $receiver
-        })
+        MERGE (receiver:Account {id: $receiver})
 
-        CREATE (sender)-[:TRANSFER {
+        CREATE (sender)-[:TRANSFERRED {
+
             amount: $amount,
-            type: $type,
-            step: $step
+
+            type: $type
+
         }]->(receiver)
 
         """
 
-        with self.driver.session(
-            database=self.database
-        ) as session:
+        with self.driver.session() as session:
 
             session.run(
 
                 query,
 
-                sender=txn["nameOrig"],
-                receiver=txn["nameDest"],
+                sender=txn.get("nameOrig"),
 
-                amount=txn["amount"],
-                type=txn["type"],
-                step=txn["step"]
+                receiver=txn.get("nameDest"),
+
+                amount=txn.get("amount"),
+
+                type=txn.get("type")
             )
 
-            print(
-                f"✅ Inserted transaction: "
-                f"{txn['nameOrig']} -> {txn['nameDest']}"
-            )
+        print("✅ Transaction stored in Neo4j")
