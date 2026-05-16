@@ -16,8 +16,6 @@ class Neo4jClient:
 
         print("🔥 Neo4j INIT STARTED")
 
-        print("URI:", os.getenv("NEO4J_URI"))
-        print("USERNAME:", os.getenv("NEO4J_USERNAME"))
 
         try:
 
