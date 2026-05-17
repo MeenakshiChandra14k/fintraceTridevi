@@ -30,6 +30,21 @@ def create_ssl_context():
     return context
 
 
+async def run_flowscope_async(flowscope_detector, txn):
+    """
+    Shifts the heavy Neo4j graph traversal out of the main Kafka thread 
+    into a background executor thread, keeping ingestion blazing fast.
+    """
+    
+    # Run the heavy Neo4j network computation in a background thread pool
+    loop = asyncio.get_running_loop()
+    result = await loop.run_in_executor(None, flowscope_detector.analyze_flow_density, txn)
+    
+    if result:
+        print("\n🌊 🕵️ FLOWSCOPE HIGH-DENSITY MALICIOUS NETWORK CAUGHT!")
+        print(json.dumps(result, indent=4))
+
+
 async def consume():
 
     neo4j_client = Neo4jClient()
@@ -76,10 +91,11 @@ async def consume():
             await asyncio.to_thread(neo4j_client.insert_transaction, txn)
 
             # Run FlowScope Graph Topology Check
-            flowscope_result = flowscope.analyze_flow_density(txn)
-            if flowscope_result:
-                print("\n🌊 🕵️ FLOwSCOPE HIGH-DENSITY MALICIOUS NETWORK CAUGHT!")
-                print(flowscope_result)
+            # flowscope_result = flowscope.analyze_flow_density(txn)
+
+            # Run flowscope asynchronously 
+            asyncio.create_task(run_flowscope_async(flowscope, txn))
+
 
             # Run velocity detection
             velocity_result = detect_velocity(txn)

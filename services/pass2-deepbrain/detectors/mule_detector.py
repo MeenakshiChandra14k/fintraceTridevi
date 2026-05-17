@@ -6,9 +6,9 @@ def detect_mule_accounts(transaction):
 
     amount = transaction.get("amount", 0)
 
-    sender = transaction.get("sender_account")
+    sender = transaction.get("nameOrig")
 
-    receiver = transaction.get("receiver_account")
+    receiver = transaction.get("nameDest")
 
     # Basic suspicious transaction rule
     if amount > 50000:
