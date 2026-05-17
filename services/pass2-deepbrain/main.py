@@ -47,7 +47,14 @@ async def consume():
             m.decode("utf-8")
         ),
 
-        group_id="deepbrain-group"
+        group_id="deepbrain-group-v2",
+
+        auto_offset_reset="latest",
+
+        session_timeout_ms=30000,   # Give the brain 30s to talk to the cloud before failing
+        max_poll_interval_ms=300000, # Allow up to 5 minutes to process a batch of data
+        max_poll_records=50         # Pull smaller batches so Neo4j doesn't queue up too high
+
     )
 
     await consumer.start()
@@ -64,7 +71,7 @@ async def consume():
             print(txn)
 
             # Store transaction in Neo4j
-            neo4j_client.insert_transaction(txn)
+            await asyncio.to_thread(neo4j_client.insert_transaction, txn)
 
             # Run velocity detection
             velocity_result = detect_velocity(txn)

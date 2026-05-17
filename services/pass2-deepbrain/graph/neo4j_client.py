@@ -42,6 +42,8 @@ class Neo4jClient:
     def close(self):
 
         self.driver.close()
+    
+    
 
     def insert_transaction(self, txn):
 

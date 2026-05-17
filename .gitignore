@@ -6,6 +6,9 @@ infra/certs/
 *.key
 .env
 
+#delete nodes in neo4j
+nuke.py 
+
 scripts/data/
 
 venv/
