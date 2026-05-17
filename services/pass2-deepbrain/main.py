@@ -6,6 +6,7 @@ import os
 from dotenv import load_dotenv
 from aiokafka import AIOKafkaConsumer
 
+from detectors.flowscope import FlowScopeDetector
 from graph.neo4j_client import Neo4jClient
 from detectors.velocity_detectors import detect_velocity
 from detectors.mule_detector import detect_mule_accounts
@@ -32,6 +33,7 @@ def create_ssl_context():
 async def consume():
 
     neo4j_client = Neo4jClient()
+    flowscope = FlowScopeDetector(neo4j_client)
 
     consumer = AIOKafkaConsumer(
 
@@ -72,6 +74,12 @@ async def consume():
 
             # Store transaction in Neo4j
             await asyncio.to_thread(neo4j_client.insert_transaction, txn)
+
+            # Run FlowScope Graph Topology Check
+            flowscope_result = flowscope.analyze_flow_density(txn)
+            if flowscope_result:
+                print("\n🌊 🕵️ FLOwSCOPE HIGH-DENSITY MALICIOUS NETWORK CAUGHT!")
+                print(flowscope_result)
 
             # Run velocity detection
             velocity_result = detect_velocity(txn)
