@@ -74,3 +74,6 @@ Thumbs.db
 
 # Logs
 *.log
+
+# Neo4j Runtime Data
+neo4j_data/
