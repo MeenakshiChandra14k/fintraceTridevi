@@ -39,3 +39,38 @@ venv/
 infra/certs/*.pem
 infra/certs/*.key
 infra/certs/*.cert
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Virtual Environments
+venv/
+.env/
+
+# Environment Variables
+.env
+
+# Neo4j
+*.db
+
+# Kafka
+kafka-logs/
+
+# SSL Certificates
+*.pem
+*.key
+*.crt
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log

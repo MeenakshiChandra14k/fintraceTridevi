@@ -16,7 +16,6 @@ class Neo4jClient:
 
         print("🔥 Neo4j INIT STARTED")
 
-
         try:
 
             self.driver = GraphDatabase.driver(
@@ -33,19 +32,27 @@ class Neo4jClient:
 
             self.driver.verify_connectivity()
 
-            print("🕸 Connected to Neo4j Aura")
+            print("🕸 Connected to Neo4j")
 
         except Exception as e:
 
             print("❌ CONNECTION ERROR:", e)
 
+            self.driver = None
+
+
     def close(self):
 
-        self.driver.close()
-    
-    
+        if self.driver:
+
+            self.driver.close()
+
 
     def insert_transaction(self, txn):
+
+        if not self.driver:
+            print("❌ Neo4j driver unavailable")
+            return
 
         query = """
 
@@ -79,3 +86,11 @@ class Neo4jClient:
             )
 
         print("✅ Transaction stored in Neo4j")
+
+
+    def check_account_restriction(self, account_id):
+
+        # Temporary local mode
+        # Always allow transactions
+
+        return False

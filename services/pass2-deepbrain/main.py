@@ -1,6 +1,5 @@
 import asyncio
 import json
-import ssl
 import os
 
 from dotenv import load_dotenv
@@ -14,20 +13,7 @@ from detectors.mule_detector import detect_mule_accounts
 load_dotenv()
 
 
-def create_ssl_context():
 
-    context = ssl.create_default_context(
-        cafile=os.getenv("KAFKA_CA_CERT_PATH")
-    )
-
-    context.load_cert_chain(
-        certfile=os.getenv("KAFKA_ACCESS_CERT_PATH"),
-        keyfile=os.getenv("KAFKA_ACCESS_KEY_PATH")
-    )
-
-    context.check_hostname = False
-
-    return context
 
 
 async def run_flowscope_async(flowscope_detector, txn):
@@ -52,13 +38,9 @@ async def consume():
 
     consumer = AIOKafkaConsumer(
 
-        os.getenv("KAFKA_TOPIC_TRANSACTIONS"),
+    os.getenv("KAFKA_TOPIC_TRANSACTIONS"),
 
-        bootstrap_servers=os.getenv("KAFKA_SERVICE_URI"),
-
-        security_protocol="SSL",
-
-        ssl_context=create_ssl_context(),
+    bootstrap_servers="localhost:9092",
 
         value_deserializer=lambda m: json.loads(
             m.decode("utf-8")
@@ -83,6 +65,26 @@ async def consume():
         async for msg in consumer:
 
             txn = msg.value
+            
+            sender = txn.get("nameOrig")
+            receiver = txn.get("nameDest")
+            amount = txn.get("amount")
+
+            # 🛑 GATEKEEPER CHECK
+            is_sender_frozen = neo4j_client.check_account_restriction(sender)
+            is_receiver_frozen = neo4j_client.check_account_restriction(receiver)
+
+            if is_sender_frozen or is_receiver_frozen:
+
+                frozen_party = sender if is_sender_frozen else receiver
+
+                print(
+                    f"\n❌ [INTERDICTED] Transaction dropped! "
+                    f"Account {frozen_party} is FROZEN. "
+                    f"Blocked transfer of {amount}"
+                )
+
+                continue
 
             print("\n📥 Transaction Received")
             print(txn)
