@@ -13,10 +13,7 @@ from detectors.mule_detector import detect_mule_accounts
 load_dotenv()
 
 
-
-
-
-async def run_flowscope_async(flowscope_detector, txn):
+async def run_flowscope_async(flowscope_detector, txn, cache_set):
     """
     Shifts the heavy Neo4j graph traversal out of the main Kafka thread 
     into a background executor thread, keeping ingestion blazing fast.
@@ -30,11 +27,21 @@ async def run_flowscope_async(flowscope_detector, txn):
         print("\n🌊 🕵️ FLOWSCOPE HIGH-DENSITY MALICIOUS NETWORK CAUGHT!")
         print(json.dumps(result, indent=4))
 
+        #local RAM - cache
+        sender = result.get("sender")
+        receiver = result.get("receiver")
+        if sender:
+            cache_set.add(sender)
+        if receiver:
+            cache_set.add(receiver)
+
 
 async def consume():
 
     neo4j_client = Neo4jClient()
     flowscope = FlowScopeDetector(neo4j_client)
+
+    LOCAL_FROZEN_CACHE = set()
 
     consumer = AIOKafkaConsumer(
 
@@ -71,15 +78,22 @@ async def consume():
             amount = txn.get("amount")
 
             # 🛑 GATEKEEPER CHECK
-            is_sender_frozen = neo4j_client.check_account_restriction(sender)
-            is_receiver_frozen = neo4j_client.check_account_restriction(receiver)
+            #is_sender_frozen = neo4j_client.check_account_restriction(sender)
+            #is_receiver_frozen = neo4j_client.check_account_restriction(receiver)
+
+            # 🛑 GATEKEEPER CHECK (Fixed to run asynchronously)
+            is_sender_frozen = sender in LOCAL_FROZEN_CACHE or await asyncio.to_thread(neo4j_client.check_account_restriction, sender)
+            is_receiver_frozen = receiver in LOCAL_FROZEN_CACHE or await asyncio.to_thread(neo4j_client.check_account_restriction, receiver)
 
             if is_sender_frozen or is_receiver_frozen:
 
                 frozen_party = sender if is_sender_frozen else receiver
 
+                LOCAL_FROZEN_CACHE.add(sender)
+                LOCAL_FROZEN_CACHE.add(receiver)
+
                 print(
-                    f"\n❌ [INTERDICTED] Transaction dropped! "
+                    f"\n❌ [INTERDICTED] Transaction dropped instantly by Gatekeeper Cache! "
                     f"Account {frozen_party} is FROZEN. "
                     f"Blocked transfer of {amount}"
                 )
@@ -96,7 +110,7 @@ async def consume():
             # flowscope_result = flowscope.analyze_flow_density(txn)
 
             # Run flowscope asynchronously 
-            asyncio.create_task(run_flowscope_async(flowscope, txn))
+            asyncio.create_task(run_flowscope_async(flowscope, txn, LOCAL_FROZEN_CACHE))
 
 
             # Run velocity detection

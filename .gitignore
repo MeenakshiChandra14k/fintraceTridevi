@@ -5,6 +5,7 @@ infra/certs/
 *.cert
 *.key
 .env
+sample.txt
 
 #delete nodes in neo4j
 nuke.py 

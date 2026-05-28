@@ -42,12 +42,12 @@ class FlowScopeDetector:
                 print(f"📊 [FlowScope Trace] Paths Found: {total_paths} | Unique Accounts: {unique_dests} | Density Ratio: {density_ratio:.2f}")
                 
                 # Flag as anomaly if the subgraph structure is too tight/dense
-                if density_ratio > 1.5 and total_paths > 2:
+                if density_ratio > 0.5 and total_paths > 2:
 
                     #free the account (dhfl case)
                     freeze_query = """
                     MATCH (a:Account)
-                    WHERE a.id = $sender OR a.id = $receiver
+                    WHERE a.id IN [$sender, $receiver]
                     SET a.status = "FROZEN", 
                         a.freeze_reason = "FlowScope High Density Subgraph Anomaly",
                         a.frozen_at = timestamp()
@@ -56,8 +56,9 @@ class FlowScopeDetector:
 
                     try:
                         with self.client.driver.session() as block_session:
-                            block_session.run(freeze_query, sender=sender, receiver=receiver)
-                            print(f"🔒 [SHIELD ENGAGED] Automatically froze high-risk routing nodes: {sender} & {receiver}")
+                            result = block_session.run(freeze_query, sender=sender, receiver=receiver)
+                            summary = result.consume() # result.consume() forces the thread to wait untill neo4j explicitly writes Frozen
+                            print(f"🔒 [SHIELD ENGAGED] Mutated {summary.counters.properties_set} properties. Automatically froze: {sender} & {receiver}")
                     except Exception as block_err:
                         print(f"⚠️ Shield execution error: {block_err}")
 
