@@ -1,9 +1,11 @@
 import asyncio
 import json
 import os
+import logging
+import time
 
 from dotenv import load_dotenv
-from aiokafka import AIOKafkaConsumer
+from aiokafka import AIOKafkaConsumer, AIOKafkaProducer
 
 from detectors.flowscope import FlowScopeDetector
 from graph.neo4j_client import Neo4jClient
@@ -12,6 +14,8 @@ from detectors.mule_detector import detect_mule_accounts
 
 load_dotenv()
 
+DLQ_TOPIC = "transactions-restricted"
+KAFKA_BOOTSTRAP_SERVERS = "localhost:9092"
 
 async def run_flowscope_async(flowscope_detector, txn, cache_set):
     """
@@ -43,18 +47,19 @@ async def consume():
 
     LOCAL_FROZEN_CACHE = set()
 
+    # Dead-Letter Queue (DLQ) Producer
+
+    dlq_producer = AIOKafkaProducer(
+        bootstrap_servers=KAFKA_BOOTSTRAP_SERVERS,
+        value_serializer=lambda v: json.dumps(v).encode("utf-8")
+    )
+
     consumer = AIOKafkaConsumer(
 
-    os.getenv("KAFKA_TOPIC_TRANSACTIONS"),
-
-    bootstrap_servers="localhost:9092",
-
-        value_deserializer=lambda m: json.loads(
-            m.decode("utf-8")
-        ),
-
+        os.getenv("KAFKA_TOPIC_TRANSACTIONS"),
+        bootstrap_servers="localhost:9092",
+        value_deserializer=lambda m: json.loads(m.decode("utf-8")),
         group_id="deepbrain-group-v2",
-
         auto_offset_reset="latest",
 
         session_timeout_ms=30000,   # Give the brain 30s to talk to the cloud before failing
@@ -64,8 +69,9 @@ async def consume():
     )
 
     await consumer.start()
+    await dlq_producer.start()
 
-    print("🧠 DeepBrain Connected to Kafka")
+    print("🧠 DeepBrain Connected to Kafka and Compliance DLQ Engine Active")
 
     try:
 
@@ -97,6 +103,17 @@ async def consume():
                     f"Account {frozen_party} is FROZEN. "
                     f"Blocked transfer of {amount}"
                 )
+
+                # DLQ payload for frontend
+                compliance_payload = {
+                    **txn,
+                    "interception_type": "GATEKEEPER_RAM_CACHE",
+                    "reason": f"Transaction blocked. Account {frozen_party} is permanently locked down in memory shield.",
+                    "timestamp_blocked": time.time()
+                }
+
+                #send to kafka topic without blocking ingestion - asynchronous
+                await dlq_producer.send_and_wait(DLQ_TOPIC, compliance_payload)
 
                 continue
 
@@ -140,6 +157,8 @@ async def consume():
         neo4j_client.close()
 
         await consumer.stop()
+
+        await dlq_producer.stop()
 
 
 if __name__ == "__main__":
