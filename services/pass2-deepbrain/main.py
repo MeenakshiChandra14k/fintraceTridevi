@@ -17,28 +17,36 @@ load_dotenv()
 DLQ_TOPIC = "transactions-restricted"
 KAFKA_BOOTSTRAP_SERVERS = "localhost:9092"
 
-async def run_flowscope_async(flowscope_detector, txn, cache_set):
+async def run_flowscope_async(flowscope_detector, neo4j_client, txn, cache_set):
     """
     Shifts the heavy Neo4j graph traversal out of the main Kafka thread 
     into a background executor thread, keeping ingestion blazing fast.
     """
     
+    sender = txn.get("nameOrig")
+    receiver = txn.get("nameDest")
+    current_step = int(txn.get("step", 1))
+
     # Run the heavy Neo4j network computation in a background thread pool
     loop = asyncio.get_running_loop()
     result = await loop.run_in_executor(None, flowscope_detector.analyze_flow_density, txn)
+
     
     if result:
         print("\n🌊 🕵️ FLOWSCOPE HIGH-DENSITY MALICIOUS NETWORK CAUGHT!")
         print(json.dumps(result, indent=4))
 
         #local RAM - cache
-        sender = result.get("sender")
-        receiver = result.get("receiver")
         if sender:
             cache_set.add(sender)
         if receiver:
             cache_set.add(receiver)
 
+
+        if sender:
+            await loop.run_in_executor(None, neo4j_client.freeze_account, sender, current_step)
+        if receiver:
+            await loop.run_in_executor(None, neo4j_client.freeze_account, receiver, current_step)
 
 async def consume():
 
@@ -127,7 +135,7 @@ async def consume():
             # flowscope_result = flowscope.analyze_flow_density(txn)
 
             # Run flowscope asynchronously 
-            asyncio.create_task(run_flowscope_async(flowscope, txn, LOCAL_FROZEN_CACHE))
+            asyncio.create_task(run_flowscope_async(flowscope, neo4j_client, txn, LOCAL_FROZEN_CACHE))
 
 
             # Run velocity detection

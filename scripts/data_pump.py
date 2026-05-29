@@ -7,7 +7,7 @@ import time
 API_URL = "http://localhost:8000/transaction"
 DATA_PATH = "scripts/data/paysim.csv"
 BATCH_SIZE = 100 
-TOTAL_LIMIT = 5000  # Start with 5k to test the waters
+TOTAL_LIMIT = 5000  # Start with 5k to test
 
 async def send_transaction(client, row):
     payload = {
