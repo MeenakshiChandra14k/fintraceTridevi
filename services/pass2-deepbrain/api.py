@@ -22,7 +22,14 @@ def get_graph():
 
     query = """
     MATCH (a)-[r]->(b)
-    RETURN a, r, b
+
+    RETURN
+        a.id AS source,
+        b.id AS target,
+        r.amount AS amount,
+        a.risk AS source_risk,
+        b.risk AS target_risk
+
     LIMIT 100
     """
 
@@ -33,34 +40,29 @@ def get_graph():
 
     for record in records:
 
-        a = record["a"]
-        b = record["b"]
-        r = record["r"]
+        source = record["source"]
+        target = record["target"]
 
-        a_id = str(a.get("id", a.element_id))
-        b_id = str(b.get("id", b.element_id))
-
-        nodes[a_id] = {
-            "id": a_id,
-            "risk": a.get("risk", 0)
+        nodes[source] = {
+            "id": source,
+            "risk": record.get("source_risk", 0)
         }
 
-        nodes[b_id] = {
-            "id": b_id,
-            "risk": b.get("risk", 0)
+        nodes[target] = {
+            "id": target,
+            "risk": record.get("target_risk", 0)
         }
 
         links.append({
-            "source": a_id,
-            "target": b_id,
-            "amount": r.get("amount", 0)
+            "source": source,
+            "target": target,
+            "amount": record.get("amount", 0)
         })
 
     return {
         "nodes": list(nodes.values()),
         "links": links
     }
-
     
 
 
@@ -112,39 +114,48 @@ def get_account_details(account_id: str):
 @app.get("/search")
 def search_account(account_id: str):
 
-    query = f"""
-    MATCH (a)-[r]->(b)
-    WHERE a.id = '{account_id}' OR b.id = '{account_id}'
-    RETURN a, r, b
-    LIMIT 50
+    query = """
+        MATCH (a)-[r]->(b)
+
+        WHERE a.id = $account_id
+            OR b.id = $account_id
+
+        RETURN
+            a.id AS source,
+            b.id AS target,
+            a.risk AS source_risk,
+            b.risk AS target_risk
+
+        LIMIT 50
     """
 
-    records = neo4j_client.run_query(query)
-
+    records = neo4j_client.run_query(
+    query,
+    {
+        "account_id": account_id
+    }
+)
     nodes = {}
     links = []
 
     for record in records:
 
-        a = record["a"]
-        b = record["b"]
+        source = record["source"]
+        target = record["target"]
 
-        a_id = str(a.get("id", a.element_id))
-        b_id = str(b.get("id", b.element_id))
-
-        nodes[a_id] = {
-            "id": a_id,
-            "risk": a.get("risk", 0)
+        nodes[source] = {
+            "id": source,
+            "risk": record.get("source_risk", 0)
         }
 
-        nodes[b_id] = {
-            "id": b_id,
-            "risk": b.get("risk", 0)
+        nodes[target] = {
+            "id": target,
+            "risk": record.get("target_risk", 0)
         }
 
         links.append({
-            "source": a_id,
-            "target": b_id
+            "source": source,
+            "target": target
         })
 
     return {

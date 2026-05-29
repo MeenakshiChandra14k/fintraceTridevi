@@ -94,3 +94,19 @@ class Neo4jClient:
         # Always allow transactions
 
         return False
+
+
+    def run_query(self, query, parameters=None):
+
+        if not self.driver:
+            print("❌ Neo4j driver unavailable")
+            return []
+
+        with self.driver.session() as session:
+
+            result = session.run(
+                query,
+                parameters or {}
+            )
+
+            return [record.data() for record in result]

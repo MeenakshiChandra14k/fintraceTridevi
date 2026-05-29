@@ -45,6 +45,8 @@ function Node({
   const [hovered, setHovered] =
     useState(false);
 
+
+
   const meshRef = useRef();
 
   useFrame(({ clock }) => {
