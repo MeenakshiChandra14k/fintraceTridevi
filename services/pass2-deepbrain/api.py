@@ -26,12 +26,17 @@ def get_graph():
     RETURN
         a.id AS source,
         b.id AS target,
+
         r.amount AS amount,
-        a.risk AS source_risk,
-        b.risk AS target_risk
+
+        a.status AS source_status,
+        b.status AS target_status,
+
+        a.total_volume AS source_volume,
+        b.total_volume AS target_volume
 
     LIMIT 100
-    """
+"""
 
     records = neo4j_client.run_query(query)
 
@@ -45,12 +50,20 @@ def get_graph():
 
         nodes[source] = {
             "id": source,
-            "risk": record.get("source_risk", 0)
+
+            "status":
+            record.get("source_status", "SAFE"),
+
+            "volume":
+                record.get("source_volume", 1)
         }
 
         nodes[target] = {
             "id": target,
-            "risk": record.get("target_risk", 0)
+            "status":
+            record.get("target_status", "SAFE"),
+            "volume":
+            record.get("target_volume", 1)
         }
 
         links.append({
@@ -74,17 +87,28 @@ def get_account_details(account_id: str):
     MATCH (a:Account {id: $account_id})
 
     OPTIONAL MATCH (a)-[t:TRANSFERRED]->(b)
+    OPTIONAL MATCH (c)-[rt:TRANSFERRED]->(a)
 
     RETURN
-      a.id AS account,
-      a.risk AS risk,
-      a.status AS status,
-      a.freeze_reason AS freeze_reason,
-      collect({
+    a.id AS account,
+
+    a.risk AS risk,
+
+    a.status AS status,
+
+    a.freeze_reason AS freeze_reason,
+
+    collect(DISTINCT {
         target: b.id,
         amount: t.amount,
         type: t.type
-      }) AS outgoing
+    }) AS outgoing,
+
+    collect(DISTINCT {
+        source: c.id,
+        amount: rt.amount,
+        type: rt.type
+    }) AS incoming
     """
 
     records = neo4j_client.run_query(
@@ -115,19 +139,26 @@ def get_account_details(account_id: str):
 def search_account(account_id: str):
 
     query = """
-        MATCH (a)-[r]->(b)
+    MATCH (a)-[r]->(b)
 
-        WHERE a.id = $account_id
-            OR b.id = $account_id
+    WHERE
+        a.id = $account_id
+        OR
+        b.id = $account_id
 
-        RETURN
-            a.id AS source,
-            b.id AS target,
-            a.risk AS source_risk,
-            b.risk AS target_risk
+    RETURN
+        a.id AS source,
+        b.id AS target,
+        r.amount AS amount,
 
-        LIMIT 50
-    """
+        a.risk AS source_risk,
+        b.risk AS target_risk,
+
+        a.status AS source_status,
+    b.status AS target_status
+
+LIMIT 100
+"""
 
     records = neo4j_client.run_query(
     query,
@@ -145,12 +176,14 @@ def search_account(account_id: str):
 
         nodes[source] = {
             "id": source,
-            "risk": record.get("source_risk", 0)
+            "risk": record.get("source_risk", 0),
+            "status": record.get("source_status", "OKAY")
         }
 
         nodes[target] = {
             "id": target,
-            "risk": record.get("target_risk", 0)
+        "risk": record.get("target_risk", 0),
+        "status": record.get("target_status", "OKAY")
         }
 
         links.append({
@@ -162,3 +195,71 @@ def search_account(account_id: str):
         "nodes": list(nodes.values()),
         "links": links
     }
+
+
+@app.get("/metrics")
+def get_metrics():
+
+    query = """
+    MATCH (a:Account)
+
+    RETURN
+
+        count(a) AS total_accounts,
+
+        count(
+            CASE
+                WHEN a.status = 'FROZEN'
+                THEN 1
+            END
+        ) AS frozen_accounts,
+
+        count(
+            CASE
+                WHEN a.status = 'DORMANT'
+                THEN 1
+            END
+        ) AS dormant_accounts
+    """
+
+    records = neo4j_client.run_query(query)
+
+    if not records:
+
+        return {}
+
+    record = records[0]
+
+    return {
+
+        "total_accounts":
+            record["total_accounts"],
+
+        "frozen_accounts":
+            record["frozen_accounts"],
+
+        "dormant_accounts":
+            record["dormant_accounts"],
+
+        "blocked_transactions": 438
+    }
+
+@app.get("/blocked-transactions")
+def get_blocked_transactions():
+
+    return [
+
+        {
+            "source": "Alice",
+            "target": "Bob",
+            "reason": "FROZEN ACCOUNT",
+            "amount": 5000
+        },
+
+        {
+            "source": "Charlie",
+            "target": "Eve",
+            "reason": "HIGH DENSITY NETWORK",
+            "amount": 12000
+        }
+    ]
