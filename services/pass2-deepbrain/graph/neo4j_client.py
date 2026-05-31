@@ -87,21 +87,37 @@ class Neo4jClient:
 
         query = """
 
-        MERGE (sender:Account {id: $sender})
-        ON CREATE SET sender.current_balance = $old_bal_orig
-        ON MATCH SET sender.current_balance = $new_bal_orig
+       MERGE (sender:Account {id: $sender})
+ON CREATE SET
+    sender.current_balance = $old_bal_orig,
+    sender.total_volume = $amount,
+    sender.status = 'ACTIVE',
+    sender.risk = 0
 
-        MERGE (receiver:Account {id: $receiver})
-        ON CREATE SET receiver.current_balance = $old_bal_dest + $amount
-        ON MATCH SET receiver.current_balance = $new_bal_dest
+ON MATCH SET
+    sender.current_balance = $new_bal_orig,
+    sender.total_volume = coalesce(sender.total_volume,0) + $amount
 
-        CREATE (sender)-[:TRANSFERRED {
 
-            amount: $amount,
-            type: $type,
-            step: $step
+MERGE (receiver:Account {id: $receiver})
+ON CREATE SET
+    receiver.current_balance = $old_bal_dest + $amount,
+    receiver.total_volume = $amount,
+    receiver.status = 'ACTIVE',
+    receiver.risk = 0
 
-        }]->(receiver)
+ON MATCH SET
+    receiver.current_balance = $new_bal_dest,
+    receiver.total_volume = coalesce(receiver.total_volume,0) + $amount
+
+
+CREATE (sender)-[:TRANSFERRED {
+
+    amount: $amount,
+    type: $type,
+    step: $step
+
+}]->(receiver)
 
         """
 

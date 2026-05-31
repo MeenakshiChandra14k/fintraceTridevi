@@ -3,6 +3,8 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from graph.neo4j_client import Neo4jClient
 
+last_step = 0
+
 app = FastAPI()
 
 # Allow frontend requests
@@ -20,25 +22,33 @@ neo4j_client = Neo4jClient()
 @app.get("/graph")
 def get_graph():
 
-    query = """
-    MATCH (a)-[r]->(b)
+    global last_step
 
-    RETURN
+    query = """
+        MATCH (a)-[r:TRANSFERRED]->(b)
+        WHERE r.step > $last_step
+        RETURN
         a.id AS source,
         b.id AS target,
-
         r.amount AS amount,
+        r.step AS step,
 
-        a.status AS source_status,
-        b.status AS target_status,
+        coalesce(a.status,'ACTIVE') AS source_status,
+        coalesce(b.status,'ACTIVE') AS target_status,
 
-        a.total_volume AS source_volume,
-        b.total_volume AS target_volume
+        coalesce(a.total_volume,0) AS source_volume,
+        coalesce(b.total_volume,0) AS target_volume
 
-    LIMIT 100
-"""
+        ORDER BY r.step
+        LIMIT 10
+    """
 
     records = neo4j_client.run_query(query)
+    if records:
+    last_step = max(
+        r["step"]
+        for r in records
+    )
 
     nodes = {}
     links = []
@@ -157,8 +167,8 @@ def search_account(account_id: str):
         a.status AS source_status,
     b.status AS target_status
 
-LIMIT 100
-"""
+ORDER BY r.step
+LIMIT 5"""
 
     records = neo4j_client.run_query(
     query,
@@ -246,20 +256,5 @@ def get_metrics():
 
 @app.get("/blocked-transactions")
 def get_blocked_transactions():
+    return []
 
-    return [
-
-        {
-            "source": "Alice",
-            "target": "Bob",
-            "reason": "FROZEN ACCOUNT",
-            "amount": 5000
-        },
-
-        {
-            "source": "Charlie",
-            "target": "Eve",
-            "reason": "HIGH DENSITY NETWORK",
-            "amount": 12000
-        }
-    ]

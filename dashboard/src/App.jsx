@@ -37,8 +37,34 @@ function App() {
 
       const data = await response.json();
 
-      setGraphData(data);
+      setGraphData((prev) => {
 
+        const existingNodes = new Map(
+          prev.nodes.map(n => [n.id, n])
+        );
+
+        data.nodes.forEach(node => {
+          existingNodes.set(node.id, node);
+        });
+
+        const existingLinks = new Map(
+          prev.links.map(
+            l => [`${l.source}-${l.target}`, l]
+          )
+        );
+
+        data.links.forEach(link => {
+          existingLinks.set(
+            `${link.source}-${link.target}`,
+            link
+          );
+        });
+
+        return {
+          nodes: Array.from(existingNodes.values()),
+          links: Array.from(existingLinks.values())
+        };
+      });
     } catch (err) {
 
       console.error(err);
@@ -57,8 +83,38 @@ function App() {
 
         const data = await response.json();
 
-        setGraphData(data);
+        setGraphData(prev => {
 
+          const existingNodes = new Map(
+            prev.nodes.map(n => [n.id, n])
+          );
+
+          data.nodes.forEach(node => {
+            existingNodes.set(node.id, node);
+          });
+
+          const existingLinks = [
+            ...prev.links
+          ];
+
+          data.links.forEach(link => {
+
+            const exists = existingLinks.some(
+              l =>
+                l.source === link.source &&
+                l.target === link.target
+            );
+
+            if (!exists) {
+              existingLinks.push(link);
+            }
+          });
+
+          return {
+            nodes: Array.from(existingNodes.values()),
+            links: existingLinks
+          };
+        });
       } catch (err) {
 
         console.error(err);

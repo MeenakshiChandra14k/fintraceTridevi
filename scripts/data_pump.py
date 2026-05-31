@@ -5,7 +5,7 @@ import time
 
 # Configuration
 API_URL = "http://localhost:8000/transaction"
-DATA_PATH = "scripts/data/paysim.csv"
+DATA_PATH = "data/paysim.csv"
 BATCH_SIZE = 100 
 TOTAL_LIMIT = 5000  # Start with 5k to test
 
