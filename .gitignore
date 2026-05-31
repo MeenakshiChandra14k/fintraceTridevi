@@ -8,7 +8,7 @@ infra/certs/
 sample.txt
 
 #delete nodes in neo4j
-nuke.py 
+#nuke.py 
 
 scripts/data/
 
