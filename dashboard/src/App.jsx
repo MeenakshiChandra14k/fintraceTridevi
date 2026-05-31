@@ -1,747 +1,599 @@
-import React, {
-  useEffect,
-  useMemo,
-  useState,
-  useRef,
-  Suspense
-} from "react";
-
-import {
-  Canvas,
-  useFrame
-} from "@react-three/fiber";
-
-import {
-  OrbitControls,
-  Text,
-  Line
-} from "@react-three/drei";
-
-import * as THREE from "three";
-
-import {
-  forceSimulation,
-  forceManyBody,
-  forceLink,
-  forceCenter
-} from "d3-force";
-
+import { useEffect, useState, useRef } from "react";
+import ForceGraph2D from "react-force-graph-2d";
 import "./App.css";
 
+function App() {
+  const graphRef = useRef();
+  const [graphData, setGraphData] = useState({
+    nodes: [],
+    links: []
+  });
 
-// ==============================
-// NODE COMPONENT
-// ==============================
+  const [selectedAccount, setSelectedAccount] = useState(null);
 
-function Node({
-  position = [0, 0, 0],
-  color,
-  label,
-  risk = 0,
-  frozen,
-  onClick
-}) {
+  const [metrics, setMetrics] = useState(null);
 
-  const [hovered, setHovered] =
-    useState(false);
+  const [blockedFeed, setBlockedFeed] = useState([]);
 
-  const meshRef = useRef();
+  const [searchInput, setSearchInput] = useState("");
 
-  useFrame(({ clock }) => {
+  const [hoveredNode, setHoveredNode] = useState(null);
 
-    if (!meshRef.current) return;
+  const [alerts, setAlerts] = useState([]);
 
-    if (risk > 80 || frozen) {
+  const [activeNodes, setActiveNodes] = useState([]);
 
-      const pulse =
-        Math.sin(
-          clock.getElapsedTime() * 2.5
-        );
+  const [showAnalytics, setShowAnalytics] = useState(false);
 
-      meshRef.current.scale.setScalar(
-        1 + pulse * 0.08
+  const searchAccount = async () => {
+
+    if (!searchInput) return;
+
+    try {
+
+      const response = await fetch(
+        `http://localhost:8001/search?account_id=${searchInput}`
       );
 
-    } else {
+      const data = await response.json();
 
-      meshRef.current.scale.setScalar(1);
+      setGraphData((prev) => {
+        if (graphRef.current) {
+          graphRef.current.d3ReheatSimulation();
+        }
+
+        const existingNodes = new Map(
+          prev.nodes.map(n => [n.id, n])
+        );
+
+        data.nodes.forEach(node => {
+          existingNodes.set(node.id, node);
+        });
+
+        const existingLinks = new Map(
+          prev.links.map(
+            l => [`${l.source}-${l.target}`, l]
+          )
+        );
+
+        data.links.forEach(link => {
+          existingLinks.set(
+            `${link.source}-${link.target}`,
+            link
+          );
+        });
+
+        return {
+          nodes: Array.from(existingNodes.values()),
+          links: Array.from(existingLinks.values())
+        };
+      });
+    } catch (err) {
+
+      console.error(err);
     }
-  });
-
-  return (
-
-    <group position={position}>
-
-      {/* NODE */}
-      <mesh
-        ref={meshRef}
-        onClick={onClick}
-        onPointerOver={() =>
-          setHovered(true)
-        }
-        onPointerOut={() =>
-          setHovered(false)
-        }
-      >
-
-        <sphereGeometry
-          args={[1, 32, 32]}
-        />
-
-        <meshStandardMaterial
-          color={
-            frozen
-              ? "#ff2b2b"
-              : color
-          }
-
-          emissive={
-            frozen
-              ? "#ff0000"
-              : color
-          }
-
-          emissiveIntensity={
-            frozen
-              ? 25
-              : risk > 50
-                ? 5
-                : 1
-          }
-        />
-
-      </mesh>
-
-      {/* LABEL */}
-      <Text
-        position={[0, 1.6, 0]}
-        fontSize={0.5}
-        color="white"
-        anchorX="center"
-        anchorY="middle"
-      >
-        {String(label).slice(0, 10)}
-      </Text>
-
-
-      {frozen && (
-
-        <Text
-          position={[0, 2.4, 0]}
-          fontSize={0.4}
-          color="#ff2b2b"
-          anchorX="center"
-          anchorY="middle"
-        >
-          🔒 FROZEN
-        </Text>
-
-      )}
-
-      {/* TOOLTIP */}
-      {hovered && (
-
-        <Text
-          position={[0, -1.7, 0]}
-          fontSize={0.38}
-          color="#00ffff"
-          anchorX="center"
-          anchorY="middle"
-        >
-          {`Risk: ${risk}%`}
-        </Text>
-
-      )}
-
-    </group>
-  );
-}
-
-
-// ==============================
-// FLOW PARTICLE
-// ==============================
-
-function FlowParticle({
-  start,
-  end
-}) {
-
-  const meshRef = useRef();
-
-  const speed = useMemo(
-    () => Math.random() * 1.2 + 0.5,
-    []
-  );
-
-  const offset = useMemo(
-    () => Math.random() * Math.PI * 2,
-    []
-  );
-
-  const startVec = useMemo(
-    () => new THREE.Vector3(...start),
-    [start]
-  );
-
-  const endVec = useMemo(
-    () => new THREE.Vector3(...end),
-    [end]
-  );
-
-  useFrame(({ clock }) => {
-
-    if (!meshRef.current) return;
-
-    const time =
-      clock.getElapsedTime();
-
-    const t =
-      (
-        Math.sin(
-          time * speed + offset
-        ) + 1
-      ) / 2;
-
-    meshRef.current.position.lerpVectors(
-      startVec,
-      endVec,
-      t
-    );
-  });
-
-  return (
-
-    <mesh ref={meshRef}>
-
-      <sphereGeometry
-        args={[0.18, 12, 12]}
-      />
-
-      <meshStandardMaterial
-        color="#ffd000"
-        emissive="#ff9900"
-        emissiveIntensity={8}
-      />
-
-    </mesh>
-  );
-}
-
-
-// ==============================
-// MAIN APP
-// ==============================
-
-function App() {
-
-  const [graph, setGraph] =
-    useState({
-      nodes: [],
-      links: []
-    });
-
-  const [selectedNode,
-    setSelectedNode] =
-    useState(null);
-
-  const [loading, setLoading] =
-    useState(true);
-
-  const [error, setError] =
-    useState(null);
-
-
-  const [searchTerm, setSearchTerm] =
-    useState("");
-
-  // ==============================
-  // FETCH GRAPH
-  // ==============================
+  };
 
   useEffect(() => {
 
-    const fetchGraph = () => {
+    const fetchGraph = async () => {
 
-      fetch(
-        "http://127.0.0.1:9000/graph"
-      )
+      try {
 
-        .then((res) => {
+        const response = await fetch(
+          "http://localhost:8001/graph"
+        );
 
-          if (!res.ok) {
+        const data = await response.json();
 
-            throw new Error(
-              "Failed to fetch graph"
-            );
+        setGraphData(prev => {
+          if (graphRef.current) {
+            graphRef.current.d3ReheatSimulation();
           }
 
-          return res.json();
-        })
-
-        .then((data) => {
-
-          console.log(
-            "GRAPH LOADED:",
-            data
+          const existingNodes = new Map(
+            prev.nodes.map(n => [n.id, n])
           );
 
-          setGraph(data);
+          data.nodes.forEach(node => {
+            existingNodes.set(node.id, node);
+          });
 
-          setLoading(false);
-        })
+          const existingLinks = [
+            ...prev.links
+          ];
 
-        .catch((err) => {
+          data.links.forEach(link => {
 
-          console.error(err);
+            const existingLinks = new Map(
+              prev.links.map(l => [`${l.source}-${l.target}-${l.amount}`, l])
+            );
 
-          setError(
-            "Backend connection failed"
-          );
+            data.links.forEach(link => {
+              existingLinks.set(
+                `${link.source}-${link.target}-${link.amount}`,
+                link
+              );
+            });
 
-          setLoading(false);
+            if (!exists) {
+              existingLinks.push(link);
+            }
+          });
+
+          return {
+            nodes: Array.from(existingNodes.values()),
+            links: existingLinks
+          };
         });
+      } catch (err) {
+
+        console.error(err);
+      }
     };
 
-    // Initial fetch
+    const fetchMetrics = async () => {
+
+      try {
+
+        const response = await fetch(
+          "http://localhost:8001/metrics"
+        );
+
+        const data = await response.json();
+
+        setMetrics(data);
+
+      } catch (err) {
+
+        console.error(err);
+      }
+    };
+
+    const fetchBlockedFeed = async () => {
+
+      try {
+
+        const response = await fetch(
+          "http://localhost:8001/blocked-transactions"
+        );
+
+        const data = await response.json();
+
+        setBlockedFeed(data);
+
+        const newAlerts = data.map((tx, index) => ({
+          id: index,
+          message: `${tx.source} → ${tx.target} blocked`,
+          reason: tx.reason
+        }));
+
+        setAlerts(newAlerts);
+        const hotAccounts = [];
+
+        data.forEach((tx) => {
+
+          hotAccounts.push(tx.source);
+          hotAccounts.push(tx.target);
+
+        });
+
+        setActiveNodes(hotAccounts);
+
+      } catch (err) {
+
+        console.error(err);
+      }
+    };
+
     fetchGraph();
+    fetchMetrics();
+    fetchBlockedFeed();
 
-    // Auto refresh every 5 seconds
-    const interval =
-      setInterval(fetchGraph, 5000);
+    const interval = setInterval(() => {
 
-    return () =>
-      clearInterval(interval);
+      fetchGraph();
+      fetchMetrics();
+      fetchBlockedFeed();
+
+    }, 5000);
+
+    return () => clearInterval(interval);
 
   }, []);
 
-
-  // ==============================
-  // FORCE LAYOUT
-  // ==============================
-
-  const nodePositions = useMemo(() => {
-
-    const positions = {};
-
-    if (!graph.nodes.length) {
-      return positions;
-    }
-
-    const simNodes =
-      graph.nodes.map((n) => ({
-        ...n
-      }));
-
-    const simLinks =
-      graph.links.map((l) => ({
-        source: l.source,
-        target: l.target
-      }));
-
-
-    const simulation =
-      forceSimulation(simNodes)
-
-        .force(
-          "charge",
-
-          forceManyBody()
-            .strength(-100)
-        )
-
-        .force(
-          "link",
-
-          forceLink(simLinks)
-
-            .id((d) => d.id)
-
-            .distance(60)
-        )
-
-        .force(
-          "center",
-
-          forceCenter(0, 0)
-        )
-
-        .stop();
-
-
-    // RUN SIMULATION
-    for (let i = 0; i < 300; i++) {
-
-      simulation.tick();
-    }
-
-
-    // FIND GRAPH CENTER
-    const avgX =
-      simNodes.reduce(
-        (sum, node) =>
-          sum + (node.x || 0),
-        0
-      ) / simNodes.length;
-
-    const avgY =
-      simNodes.reduce(
-        (sum, node) =>
-          sum + (node.y || 0),
-        0
-      ) / simNodes.length;
-
-
-    // SAVE CENTERED POSITIONS
-    simNodes.forEach((node) => {
-
-      positions[node.id] = [
-
-        ((node.x || 0) - avgX) * 0.08,
-
-        ((node.y || 0) - avgY) * 0.08,
-
-        0
-      ];
-    });
-
-    return positions;
-
-  }, [graph]);
-
-
   return (
 
-    <div className="app">
+    <div className="app-container">
 
-      {/* HEADER */}
-      <div className="hud-top">
+      <div className="sidebar">
 
-        <div className="brand">
+        <h1>🛡️ FinTrace SOC</h1>
 
-          🧠 FinTrace DeepBrain
+        <p>Live Fraud Network Monitoring</p>
 
-        </div>
-
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: "15px"
-          }}
+        <hr />
+        <button
+          className="analytics-btn"
+          onClick={() =>
+            setShowAnalytics(!showAnalytics)
+          }
         >
+          📊 Compliance Analytics
+        </button>
 
-          <div className="status">
+        <p>Total Nodes: {graphData.nodes.length}</p>
 
-            {
-              loading
-                ? "SYNCING GRAPH..."
-                : "LIVE FRAUD MESH ACTIVE"
-            }
+        <p>Total Links: {graphData.links.length}</p>
 
-          </div>
+      </div>
+
+      <div className="graph-panel">
+
+        <div className="search-bar">
 
           <input
             type="text"
             placeholder="Search Account ID..."
-            value={searchTerm}
-            onChange={(e) =>
-              setSearchTerm(e.target.value)
-            }
-            style={{
-              padding: "10px",
-              borderRadius: "8px",
-              border: "1px solid #333",
-              outline: "none",
-              background: "#111827",
-              color: "white",
-              width: "220px"
-            }}
+            value={searchInput}
+            onChange={(e) => setSearchInput(e.target.value)}
           />
 
-        </div>
-
-      </div>
-
-
-      {/* ERROR */}
-      {error && (
-
-        <div className="error-box">
-
-          ❌ {error}
-
-        </div>
-      )}
-
-
-      {/* LOADING */}
-      {loading && (
-
-        <div className="loading-overlay">
-
-          <div className="loader-card">
-
-            <div className="spinner" />
-
-            <p>
-              Analyzing transaction graph...
-            </p>
-
-          </div>
-
-        </div>
-      )}
-
-
-      {/* DASHBOARD */}
-      <div className="dashboard">
-
-        <div className="card">
-          <h3>Total Accounts</h3>
-          <p>{graph.nodes.length}</p>
-        </div>
-
-        <div className="card">
-          <h3>Total Transfers</h3>
-          <p>{graph.links.length}</p>
-        </div>
-
-        <div className="card">
-          <h3>High Risk</h3>
-          <p>
-            {
-              graph.nodes.filter(
-                n => (n.risk || 0) > 80
-              ).length
-            }
-          </p>
-        </div>
-
-      </div>
-
-
-
-      {/* CANVAS */}
-      <Canvas
-
-        camera={{
-          position: [0, 0, 20],
-          fov: 75
-        }}
-
-        style={{
-          width: "100vw",
-          height: "100vh",
-          background: "#050816"
-        }}
-      >
-
-        <Suspense fallback={null}>
-
-          {/* LIGHTS */}
-          <ambientLight intensity={2} />
-
-          <pointLight
-            position={[0, 0, 50]}
-            intensity={120}
-          />
-
-
-          {/* CONTROLS */}
-          <OrbitControls
-            enablePan
-            enableZoom
-            enableRotate
-          />
-
-
-          {/* LINKS */}
-          {graph.links.map((link, i) => {
-
-            const source =
-              nodePositions[link.source];
-
-            const target =
-              nodePositions[link.target];
-
-            if (!source || !target)
-              return null;
-
-            return (
-
-              <Line
-                key={i}
-
-                points={[
-                  source,
-                  target
-                ]}
-
-                color="#3ad7ff"
-
-                lineWidth={1.5}
-              />
-
-            );
-          })}
-
-
-          {/* FLOW PARTICLES */}
-          {graph.links
-            .slice(0, 40)
-            .map((link, i) => {
-
-              const source =
-                nodePositions[link.source];
-
-              const target =
-                nodePositions[link.target];
-
-              if (!source || !target)
-                return null;
-
-              return (
-
-                <FlowParticle
-                  key={`flow-${i}`}
-                  start={source}
-                  end={target}
-                />
-
-              );
-            })}
-
-
-          {/* NODES */}
-          {graph.nodes
-            .filter((node) =>
-              node.id
-                .toLowerCase()
-                .includes(
-                  searchTerm.toLowerCase()
-                )
-            )
-            .map((node) => {
-              const pos =
-                nodePositions[node.id];
-
-              if (!pos) return null;
-
-              const risk =
-                node.risk || 0;
-
-              return (
-
-                <Node
-                  key={node.id}
-
-                  position={pos}
-
-                  color={
-                    risk >= 70
-                      ? "#ff2b2b"
-                      : risk >= 40
-                        ? "#ffd000"
-                        : "#00ff88"
-                  }
-
-                  label={node.id}
-
-                  risk={risk}
-
-                  frozen={risk > 80}
-
-                  onClick={() =>
-                    setSelectedNode(node)
-                  }
-                />
-
-              );
-            })}
-
-        </Suspense>
-
-      </Canvas>
-
-
-      {/* SIDEBAR */}
-      {selectedNode && (
-
-        <div className="sidebar">
-
-          <div className="sidebar-header">
-
-            <h2>
-              🕵 Investigation Panel
-            </h2>
-
-          </div>
-
-          <div className="sidebar-body">
-
-            <p>
-
-              <b>Account</b>
-
-              <br />
-
-              {selectedNode.id}
-
-            </p>
-
-            <p>
-
-              <b>Risk Score</b>
-
-              <br />
-
-              {selectedNode.risk || 0}%
-
-            </p>
-
-            <p>
-
-              <b>Status</b>
-
-              <br />
-
-              {
-                (selectedNode.risk || 0) > 80
-                  ? "🔒 Frozen"
-                  : "✅ Active"
-              }
-
-            </p>
-
-            {(selectedNode.risk || 0) > 80 && (
-
-              <p>
-
-                <b>Freeze Reason</b>
-
-                <br />
-
-                Mule Account / Layering Activity
-
-              </p>
-
-            )}
-
-          </div>
-
-          <button
-            className="close-btn"
-
-            onClick={() =>
-              setSelectedNode(null)
-            }
-          >
-            Close Panel
+          <button onClick={searchAccount}>
+            Search
           </button>
 
         </div>
-      )}
+
+        {hoveredNode && (
+
+          <div className="hover-card">
+
+            <h3>🧠 Account Intelligence</h3>
+
+            <p>
+              <strong>ID:</strong>
+              {hoveredNode.id}
+            </p>
+
+            <p>
+              <strong>Status:</strong>
+              {hoveredNode.status || "SAFE"}
+            </p>
+
+            <p>
+              <strong>Volume:</strong>
+              {hoveredNode.volume || 0}
+            </p>
+
+          </div>
+        )}
+
+        <div className="alert-stack">
+
+          {alerts.map((alert) => (
+
+            <div
+              key={alert.id}
+              className="alert-toast"
+            >
+
+              <strong>🚨 ALERT</strong>
+
+              <p>{alert.message}</p>
+
+              <small>{alert.reason}</small>
+
+            </div>
+
+          ))}
+
+        </div>
+        {showAnalytics && (
+
+          <div className="analytics-panel">
+
+            <h2>📊 Compliance Intelligence</h2>
+
+            <div className="analytics-grid">
+
+              <div className="analytics-card">
+                <h3>Suspicious Volume</h3>
+                <p>$8.2M</p>
+              </div>
+
+              <div className="analytics-card">
+                <h3>AML Flags</h3>
+                <p>184</p>
+              </div>
+
+              <div className="analytics-card">
+                <h3>Frozen Accounts</h3>
+                <p>{metrics?.frozen_accounts || 0}</p>
+              </div>
+
+              <div className="analytics-card">
+                <h3>Risk Clusters</h3>
+                <p>12</p>
+              </div>
+
+            </div>
+
+            <h3 className="risk-title">
+              🔥 Top Risk Accounts
+            </h3>
+
+            <div className="risk-list">
+
+              {graphData.nodes
+                .slice(0, 5)
+                .map((node, index) => (
+
+                  <div
+                    key={index}
+                    className="risk-item"
+                  >
+
+                    <span>{node.id}</span>
+
+                    <span>
+                      {node.status || "SAFE"}
+                    </span>
+
+                  </div>
+
+                ))}
+
+            </div>
+
+          </div>
+        )}
+        <ForceGraph2D
+          ref={graphRef}
+          graphData={graphData}
+          cooldownTicks={100}
+
+
+          linkSource="source"
+          linkTarget="target"
+
+          nodeLabel={(node) => `
+            Account: ${node.id}
+            Risk Score: ${node.risk || 0}
+            Status: ${node.status || "ACTIVE"}
+            Volume: ${node.volume || 0}
+          `}
+
+          nodeColor={(node) => {
+
+            if (node.status === "FROZEN")
+              return "#6b7280";
+
+            if (node.status === "HIGH_RISK")
+              return "#ef4444";
+
+            if (node.status === "DORMANT")
+              return "#8b5cf6";
+
+            return "#22c55e";
+          }}
+
+          nodeVal={(node) => {
+
+            return Math.max(
+              node.volume / 1000,
+              2
+            );
+          }}
+
+          nodeCanvasObject={(node, ctx, globalScale) => {
+
+            const label = node.id;
+
+            const fontSize = 12 / globalScale;
+
+            ctx.font = `${fontSize}px Sans-Serif`;
+
+            let color = "#22c55e";
+
+            if (node.status === "FROZEN") {
+              color = "#6b7280";
+            }
+
+            else if (node.risk > 70) {
+              color = "#ef4444";
+            }
+
+            else if (node.risk > 30) {
+              color = "#f59e0b";
+            }
+
+            const size = node.volume
+              ? Math.max(6, Math.log(node.volume))
+              : 8;
+
+            if (
+              node.status === "FROZEN" ||
+              node.risk > 70
+            ) {
+
+              ctx.shadowColor = color;
+
+              ctx.shadowBlur = 25;
+
+            } else {
+
+              ctx.shadowBlur = 0;
+            }
+
+            ctx.beginPath();
+
+            ctx.arc(
+              node.x,
+              node.y,
+              size,
+              0,
+              2 * Math.PI
+            );
+            const pulse =
+              activeNodes.includes(node.id)
+                ? Math.sin(Date.now() * 0.005) * 4
+                : 0;
+
+            ctx.beginPath();
+
+            ctx.arc(
+              node.x,
+              node.y,
+              size + pulse,
+              0,
+              2 * Math.PI
+            );
+
+            ctx.fillStyle = color;
+
+            ctx.fill();
+
+            ctx.fillStyle = "white";
+
+            ctx.fillText(
+              label,
+              node.x + 12,
+              node.y + 4
+            );
+          }}
+
+          onNodeClick={async (node) => {
+
+            try {
+
+              const response = await fetch(
+                `http://localhost:8001/account/${node.id}`
+              );
+
+              const data = await response.json();
+
+              setSelectedAccount(data);
+
+            } catch (err) {
+
+              console.error(err);
+            }
+          }}
+
+          onNodeHover={(node) => {
+            setHoveredNode(node || null);
+          }}
+
+          linkDirectionalParticles={2}
+
+          linkDirectionalParticleSpeed={0.005}
+
+          backgroundColor="#020617"
+        />
+
+        <div className="metrics-bar">
+
+          <div className="metric-card">
+            <h3>Frozen</h3>
+            <p>{metrics?.frozen_accounts || 0}</p>
+          </div>
+
+          <div className="metric-card">
+            <h3>Dormant</h3>
+            <p>{metrics?.dormant_accounts || 0}</p>
+          </div>
+
+          <div className="metric-card">
+            <h3>Total</h3>
+            <p>{metrics?.total_accounts || 0}</p>
+          </div>
+
+          <div className="metric-card">
+            <h3>Blocked</h3>
+            <p>{metrics?.blocked_transactions || 0}</p>
+          </div>
+
+        </div>
+
+        <div className="blocked-feed">
+
+          <h2>🚨 Blocked Transactions</h2>
+
+          {blockedFeed.map((tx, index) => (
+
+            <div
+              key={index}
+              className="blocked-card"
+            >
+
+              <p>
+                <strong>{tx.source}</strong>
+                {" → "}
+                <strong>{tx.target}</strong>
+              </p>
+
+              <p>${tx.amount}</p>
+
+              <small>{tx.reason}</small>
+
+            </div>
+
+          ))}
+
+        </div>
+
+        {selectedAccount && (
+
+          <div className="side-panel">
+
+            <button
+              className="close-btn"
+              onClick={() => setSelectedAccount(null)}
+            >
+              ✖
+            </button>
+
+            <h2>🕵 Account Intelligence</h2>
+
+            <p>
+              <strong>Account:</strong>
+              {selectedAccount.account}
+            </p>
+
+            <p>
+              <strong>Status:</strong>
+              {selectedAccount.status || "ACTIVE"}
+            </p>
+
+            <p>
+              <strong>Risk:</strong>
+              {selectedAccount.risk || 0}
+            </p>
+
+            <p>
+              <strong>Freeze Reason:</strong>
+              {selectedAccount.freeze_reason || "None"}
+            </p>
+
+            <h3>Outgoing Transfers</h3>
+
+            <ul>
+
+              {selectedAccount.outgoing?.map((tx, index) => (
+
+                <li key={index}>
+                  → {tx.target} (${tx.amount})
+                </li>
+
+              ))}
+
+            </ul>
+
+          </div>
+        )}
+
+      </div>
 
     </div>
   );
