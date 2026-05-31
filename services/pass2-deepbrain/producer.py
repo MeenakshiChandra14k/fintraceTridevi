@@ -28,8 +28,9 @@ async def send():
 
             print("📤 Sent:", txn)
 
-            time.sleep(3)
+            await asyncio.sleep(3)
 
+            
     finally:
         await producer.stop()
 

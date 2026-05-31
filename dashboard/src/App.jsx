@@ -1,9 +1,9 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import ForceGraph2D from "react-force-graph-2d";
 import "./App.css";
 
 function App() {
-
+  const graphRef = useRef();
   const [graphData, setGraphData] = useState({
     nodes: [],
     links: []
@@ -38,6 +38,9 @@ function App() {
       const data = await response.json();
 
       setGraphData((prev) => {
+        if (graphRef.current) {
+          graphRef.current.d3ReheatSimulation();
+        }
 
         const existingNodes = new Map(
           prev.nodes.map(n => [n.id, n])
@@ -84,6 +87,9 @@ function App() {
         const data = await response.json();
 
         setGraphData(prev => {
+          if (graphRef.current) {
+            graphRef.current.d3ReheatSimulation();
+          }
 
           const existingNodes = new Map(
             prev.nodes.map(n => [n.id, n])
@@ -99,11 +105,16 @@ function App() {
 
           data.links.forEach(link => {
 
-            const exists = existingLinks.some(
-              l =>
-                l.source === link.source &&
-                l.target === link.target
+            const existingLinks = new Map(
+              prev.links.map(l => [`${l.source}-${l.target}-${l.amount}`, l])
             );
+
+            data.links.forEach(link => {
+              existingLinks.set(
+                `${link.source}-${link.target}-${link.amount}`,
+                link
+              );
+            });
 
             if (!exists) {
               existingLinks.push(link);
@@ -338,7 +349,13 @@ function App() {
           </div>
         )}
         <ForceGraph2D
+          ref={graphRef}
           graphData={graphData}
+          cooldownTicks={100}
+
+
+          linkSource="source"
+          linkTarget="target"
 
           nodeLabel={(node) => `
             Account: ${node.id}

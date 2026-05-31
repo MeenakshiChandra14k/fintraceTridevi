@@ -4,6 +4,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from graph.neo4j_client import Neo4jClient
 
 last_step = 0
+GRAPH_BATCH_SIZE = 50
 
 app = FastAPI()
 
@@ -21,75 +22,68 @@ neo4j_client = Neo4jClient()
 
 @app.get("/graph")
 def get_graph():
-
     global last_step
 
     query = """
-        MATCH (a)-[r:TRANSFERRED]->(b)
-        WHERE r.step > $last_step
-        RETURN
+    MATCH (a)-[r:TRANSFERRED]->(b)
+    RETURN
         a.id AS source,
         b.id AS target,
         r.amount AS amount,
         r.step AS step,
-
         coalesce(a.status,'ACTIVE') AS source_status,
         coalesce(b.status,'ACTIVE') AS target_status,
-
         coalesce(a.total_volume,0) AS source_volume,
         coalesce(b.total_volume,0) AS target_volume
-
-        ORDER BY r.step
-        LIMIT 10
+    ORDER BY r.step DESC
+    LIMIT 100
     """
 
-    records = neo4j_client.run_query(query)
-    if records:
-    last_step = max(
-        r["step"]
-        for r in records
-    )
+    records = neo4j_client.run_query(query, {})
+
+    if not records:
+        return {"nodes": [], "links": []}
+
+    # update last_step safely
+    steps = [r["step"] for r in records if r.get("step") is not None]
+    if steps:
+        last_step = max(steps)
 
     nodes = {}
     links = []
 
-    for record in records:
+    for r in records:
+        source = r["source"]
+        target = r["target"]
 
-        source = record["source"]
-        target = record["target"]
+        if source:
+            nodes[source] = {
+                "id": source,
+                "status": r.get("source_status", "ACTIVE"),
+                "volume": r.get("source_volume", 0)
+            }
 
-        nodes[source] = {
-            "id": source,
-
-            "status":
-            record.get("source_status", "SAFE"),
-
-            "volume":
-                record.get("source_volume", 1)
-        }
-
-        nodes[target] = {
-            "id": target,
-            "status":
-            record.get("target_status", "SAFE"),
-            "volume":
-            record.get("target_volume", 1)
-        }
+        if target:
+            nodes[target] = {
+                "id": target,
+                "status": r.get("target_status", "ACTIVE"),
+                "volume": r.get("target_volume", 0)
+            }
 
         links.append({
             "source": source,
             "target": target,
-            "amount": record.get("amount", 0)
+            "amount": r.get("amount", 0),
+            "step": r.get("step", 0)
         })
 
     return {
         "nodes": list(nodes.values()),
         "links": links
     }
+
+
     
-
-
-
 @app.get("/account/{account_id}")
 def get_account_details(account_id: str):
 
