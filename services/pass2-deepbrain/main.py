@@ -26,13 +26,38 @@ KAFKA_BOOTSTRAP_SERVERS = "localhost:9092"
 # Global tracking references so the API can read them instantly
 BLOCKED_TRANSACTIONS_DLQ = []
 LOCAL_FROZEN_CACHE = set()
+ACTIVE_NODES_IN_LAST_30S = set()
+
+GLOBAL_METRICS = {"total_accounts": 0, "frozen_accounts": 0}
+
+async def update_metrics_task():
+    neo4j_client = Neo4jClient()
+    while True:
+        try:
+            GLOBAL_METRICS["total_accounts"] = neo4j_client.get_total_node_count()
+            GLOBAL_METRICS["frozen_accounts"] = neo4j_client.get_frozen_account_count()
+        except Exception as e:
+            print(f"❌ Error updating metrics: {e}")
+        await asyncio.sleep(5)
+
+async def clear_active_nodes_task():
+    while True:
+        # Wait for 60 seconds
+        await asyncio.sleep(30)
+        # Clear the set to reset the window
+        ACTIVE_NODES_IN_LAST_30S.clear()
+        print("Active nodes window reset.")
 
 # --- MODERN LIFESPAN MANAGER ---
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     task = asyncio.create_task(consume())
+    cleaner_task = asyncio.create_task(clear_active_nodes_task())
+    node_count_task = asyncio.create_task(update_metrics_task())
     yield
     task.cancel()
+    cleaner_task.cancel()
+    node_count_task.cancel()
 
 # Initialize API Gateway
 app = FastAPI(title="FinTrace SOC API Gateway", lifespan=lifespan)
@@ -57,6 +82,8 @@ async def run_flowscope_async(flowscope_detector, neo4j_client, txn, cache_set):
     sender = txn.get("nameOrig")
     receiver = txn.get("nameDest")
     current_step = int(txn.get("step", 1))
+
+   
 
     # Run the heavy Neo4j network computation in a background thread pool
     loop = asyncio.get_running_loop()
@@ -135,6 +162,12 @@ async def consume():
             receiver = txn.get("nameDest")
             amount = txn.get("amount")
 
+            # Update Total
+            
+    
+            # Update Active (reset periodically or via TTL)
+            ACTIVE_NODES_IN_LAST_30S.add(sender)
+
             # 🛑 GATEKEEPER CHECK
             #is_sender_frozen = neo4j_client.check_account_restriction(sender)
             #is_receiver_frozen = neo4j_client.check_account_restriction(receiver)
@@ -147,8 +180,9 @@ async def consume():
 
                 frozen_party = sender if is_sender_frozen else receiver
 
-                LOCAL_FROZEN_CACHE.add(sender)
-                LOCAL_FROZEN_CACHE.add(receiver)
+                for account in [sender, receiver]:
+                    if account and account not in LOCAL_FROZEN_CACHE:
+                        LOCAL_FROZEN_CACHE.add(account)
 
                 print(
                     f"\n❌ [INTERDICTED] Transaction dropped instantly by Gatekeeper Cache! "
@@ -231,7 +265,9 @@ async def consume():
 @app.get("/api/metrics")
 async def get_metrics():
     return {
-        "frozen_accounts": len(LOCAL_FROZEN_CACHE),
+        "total_accounts": GLOBAL_METRICS["total_accounts"], 
+        "active_nodes": len(ACTIVE_NODES_IN_LAST_30S),
+        "frozen_accounts": GLOBAL_METRICS["frozen_accounts"],
         "blocked_transactions": len(BLOCKED_TRANSACTIONS_DLQ),
     }
 

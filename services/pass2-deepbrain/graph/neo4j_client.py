@@ -79,6 +79,15 @@ class Neo4jClient:
                     "lost_funds_pool": round(result["lost_traffic"] or 0.0, 2)
                 }
 
+    def get_total_node_count(self):
+        if not self.driver:
+            return 0
+        # Neo4j count store is O(1) and extremely fast
+        query = "MATCH (a:Account) RETURN count(a) as total"
+        with self.driver.session() as session:
+            result = session.run(query).single()
+            return result["total"] if result else 0
+
     def insert_transaction(self, txn):
 
         if not self.driver:
@@ -139,6 +148,12 @@ class Neo4jClient:
         with self.driver.session() as session:
             session.run(query, account_id=account_id, current_step=int(current_step))
         print(f"🔒 Account {account_id} locked down permanently at step {current_step}")
+
+    def get_frozen_account_count(self):
+        query = "MATCH (a:Account {status: 'FROZEN'}) RETURN count(a) as total"
+        with self.driver.session() as session:
+            result = session.run(query).single()
+            return result["total"] if result else 0
 
     def close(self):
         if self.driver:
