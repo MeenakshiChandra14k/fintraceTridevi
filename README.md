@@ -82,8 +82,15 @@ git clone https://github.com/your-username/fintracetridevi.git
 cd fintracetridevi
 ```
 
+### First Time Setup
+```bash
+make setup   # downloads sample data + creates .env
+make all     # starts full stack
+```
+
 Start the entire stack with one command:
 ```bash
+make setup
 make all
 ```
 
