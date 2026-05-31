@@ -90,7 +90,6 @@ make all     # starts full stack
 
 Start the entire stack with one command:
 ```bash
-make setup
 make all
 ```
 
