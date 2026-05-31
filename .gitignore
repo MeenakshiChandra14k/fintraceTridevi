@@ -4,7 +4,7 @@ infra/certs/
 *.pem
 *.cert
 *.key
-.env
+
 sample.txt
 
 #delete nodes in neo4j
@@ -24,7 +24,7 @@ __pycache__/
 
 # Virtual env
 venv/
-.env/
+
 
 # Logs
 *.log
@@ -49,10 +49,9 @@ __pycache__/
 
 # Virtual Environments
 venv/
-.env/
 
-# Environment Variables
-.env
+
+
 
 # Neo4j
 *.db

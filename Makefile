@@ -2,6 +2,9 @@
 
 VENV = source /Users/sajith/fintraceTridevi/venv/bin/activate
 
+setup:
+	curl -L "https://drive.google.com/file/d/1MF2G8UUirdx2OpS1kxx0MJB2hquYgIDF/view?usp=sharing" -o scripts/data/paysim.csv
+
 all:
 	docker compose up -d
 	osascript -e 'tell app "Terminal" to activate' -e 'tell app "Terminal" to do script "cd $(PWD) && make gateway"'
