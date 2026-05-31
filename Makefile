@@ -1,20 +1,22 @@
 .PHONY: all kafka gateway deepbrain frontend stop
 
+VENV = source /Users/sajith/fintraceTridevi/venv/bin/activate
+
 all:
 	docker compose up -d
-	@make kafka &
-	@make gateway &
-	@make deepbrain &
-	@make frontend
-
-kafka:
-	cd scripts && python data_pump.py
+	osascript -e 'tell app "Terminal" to activate' -e 'tell app "Terminal" to do script "cd $(PWD) && make gateway"'
+	osascript -e 'tell app "Terminal" to activate' -e 'tell app "Terminal" to do script "cd $(PWD) && make deepbrain"'
+	osascript -e 'tell app "Terminal" to activate' -e 'tell app "Terminal" to do script "cd $(PWD) && make kafka"'
+	osascript -e 'tell app "Terminal" to activate' -e 'tell app "Terminal" to do script "cd $(PWD) && make frontend"'
 
 gateway:
-	cd services/gateway-api && pip install -r requirements.txt --break-system-packages -q && python main.py
+	cd services/gateway-api && $(VENV) && python3 main.py
 
 deepbrain:
-	cd services/pass2-deepbrain && pip install -r requirements.txt --break-system-packages -q && python nuke.py && python main.py
+	cd services/pass2-deepbrain && $(VENV) && python3 nuke.py && python3 main.py
+
+kafka:
+	$(VENV) && python3 scripts/data_pump.py
 
 frontend:
 	cd dashboard && npm install && npm run dev
