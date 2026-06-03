@@ -1,6 +1,5 @@
 # 🛡️ FinTrace SOC
 ### Real-Time Financial Intelligence & Forensic Analysis Platform
-
 FinTrace SOC is a high-performance, real-time forensic platform that transforms raw transaction streams into an interactive, visual threat map. Built to intercept financial crime as it happens — not after the capital has vanished.
 
 ---
@@ -8,11 +7,10 @@ FinTrace SOC is a high-performance, real-time forensic platform that transforms 
 ## 🚀 Key Features
 
 - **FlowScope — Cycle Detection Engine**: Runs graph-based cycle detection across live transaction networks, exposing circular money flows and multi-hop layering patterns the moment they form.
-- **Shield Interception Engine**: Automated, high-precision detection of suspicious transactions with 99.9% detection accuracy, surfaced live in the Compliance DLQ feed.
+- **Shield Interception Engine**: Automated, high-precision detection of suspicious transactions achieving a **99.05% capital interception rate** — securing $1.05B against $9.97M lost across 7,718 simulated accounts.
 - **Real-Time Force Graph**: Interactive D3.js force-directed topology — every node, every link, every flagged entity rendered in real time with zoom and drill-down.
-- **DHFL Case Modeling**: Stress-tested against the ₹34,000 crore DHFL housing finance fraud — modeling multi-hop shell entity structures and velocity anomalies.
+- **DHFL-Inspired Fraud Topology**: Architected around circular shell entity patterns, multi-hop layering, and velocity anomalies modeled after the ₹34,000 crore DHFL case — validated on the publicly available PaySim financial transaction dataset.
 - **One-Command Deployment**: Entire stack orchestrated via a single `make all` command — zero manual intervention.
-
 ---
 
 

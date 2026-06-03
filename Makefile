@@ -2,9 +2,9 @@
 
 VENV = source /Users/sajith/fintraceTridevi/venv/bin/activate
 
-setup:
-	curl -L "https://drive.google.com/file/d/1MF2G8UUirdx2OpS1kxx0MJB2hquYgIDF/view?usp=sharing" -o scripts/data/paysim.csv
-
+setup: ## Download dataset via KaggleHub
+	@echo "Downloading dataset using KaggleHub..."
+	$(VENV) && python3 scripts/download_data.py
 all:
 	docker compose up -d
 	osascript -e 'tell app "Terminal" to activate' -e 'tell app "Terminal" to do script "cd $(PWD) && make gateway"'
